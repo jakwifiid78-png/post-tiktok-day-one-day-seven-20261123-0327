@@ -53,3 +53,15 @@ card from the press pack laid over the last 2.5 seconds, referral code typed
 into its field. No footage was faked or drawn by hand — what you see is the
 game itself. Rebuild the video any time with `./build-video.sh` (it re-cuts
 the segments from `frames/` and re-concats them).
+
+## v3.0 — YouTube edit: The World's Hardest Game (23 Nov 2026)
+Video rebuilt from YouTube footage instead of ORB HOP gameplay, per user request
+("cari game paling sulit di YouTube, edit dari easy day 1 sampai hard day 7").
+Source: "The World's Hardest Game - 0 death Speed Run 6:29" (Snubby Land, 2009,
+18M views) — `yt/worlds-hardest-speedrun.mp4` (480x360, not committed).
+Day 1 = level 1/30 (t=5-12s, few dots, SO EASY); Day 7 = level 30/30
+(t=382-392s, dense red-dot hell, SO HARD). Layout: blurred-background 9:16,
+gameplay centered 1080x810. Kept segB (ONE WEEK LATER) + segD (referral end
+card n0n6z7h3) from v2.0. Build: `bash build-video-yt.sh` -> 21.0s, 1080x1920,
+30fps, H.264 + silent AAC. NOTE: caption still says "Made by my AI agent" —
+the footage is now another game, not ORB HOP; user decides on caption wording.
