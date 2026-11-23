@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ORB HOP — day one / day seven</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #111; height: 100%; overflow: hidden; }
+  canvas { display: block; width: 1080px; height: 1920px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1080" height="1920"></canvas>
+<script>
+'use strict';
+// ORB HOP — a tiny agent-built hopping game.
+// Same map, same start, same scripted run in both builds.
+//   ?v=day1  — the day-one build: flat grey, dots, no enemies, no polish.
+//   ?v=day7  — the day-seven build: same run, one week of daily updates.
+//   ?t=3.5   — render one exact moment (used to film the video).
+// Without ?t= the game loops the run live.
+
+const params = new URLSearchParams(location.search);
+const VERSION = params.get('v') === 'day7' ? 'day7' : 'day1';
+const LOOP = 10; // seconds per run
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Platforms: [x, width, topY]. Identical in both builds.
+const PLATFORMS = [
+  [60, 960, 1660],   // ground
+  [110, 410, 1360],
+  [620, 390, 1160],
+  [140, 420, 890],
+  [600, 380, 650],
+  [330, 420, 410],
+];
+const ORB_R = 34;
+
+// The run, as keyframes [time, x, centreY]. Same in both builds.
+const KEYS = [
+  [0.0, 200, 1626],
+  [1.0, 320, 1626],
+  [2.0, 360, 1326],
+  [3.0, 780, 1126],
+  [4.0, 360, 856],
+  [5.0, 800, 616],
+  [6.0, 540, 376],
+  [7.0, 540, 376],
+  [8.0, 900, 1626],
+  [9.0, 200, 1626],
+  [10.0, 200, 1626],
+];
+
+// Collectibles: [x, y, collectTime]. Same spots in both builds.
+const DOTS = [
+  [320, 1610, 1.0],
+  [780, 1100, 3.0],
+  [360, 830, 4.0],
+  [800, 590, 5.0],
+  [540, 350, 6.0],
+  [900, 1610, 8.0],
+];
+
+function smooth(e) { return e * e * (3 - 2 * e); }
+
+function orbPos(t) {
+  t = Math.max(0, Math.min(LOOP, t));
+  for (let i = 0; i < KEYS.length - 1; i++) {
+    const [t0, x0, y0] = KEYS[i];
+    const [t1, x1, y1] = KEYS[i + 1];
+    if (t >= t0 && t <= t1) {
+      const span = t1 - t0;
+      const e = span === 0 ? 0 : smooth((t - t0) / span);
+      const x = x0 + (x1 - x0) * e;
+      let y = y0 + (y1 - y0) * e;
+      // Hop arc between keyframes (small when falling down).
+      const arc = y1 >= y0 ? 40 : 150;
+      y -= arc * Math.sin(Math.PI * e);
+      // Idle bounce while standing still.
+      if (x0 === x1 && y0 === y1) y -= Math.abs(Math.sin(t * 4)) * 10;
+      return [x, y];
+    }
+  }
+  return [200, 1626];
+}
+
+function collected(t) {
+  let n = 0;
+  for (const d of DOTS) if (t >= d[2]) n++;
+  return n;
+}
+
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawBackground(t) {
+  if (VERSION === 'day1') {
+    ctx.fillStyle = '#d9d9d9';
+    ctx.fillRect(0, 0, 1080, 1920);
+    return;
+  }
+  // Day 7: sunset gradient sky.
+  const g = ctx.createLinearGradient(0, 0, 0, 1920);
+  g.addColorStop(0, '#3a1c71');
+  g.addColorStop(0.45, '#d76d77');
+  g.addColorStop(0.8, '#ffaf7b');
+  g.addColorStop(1, '#ffb37b');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 1080, 1920);
+  // Sun with glow.
+  const glow = ctx.createRadialGradient(880, 260, 10, 880, 260, 260);
+  glow.addColorStop(0, 'rgba(255, 209, 102, 0.9)');
+  glow.addColorStop(1, 'rgba(255, 209, 102, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(620, 0, 460, 520);
+  ctx.fillStyle = '#ffd166';
+  ctx.beginPath(); ctx.arc(880, 260, 92, 0, Math.PI * 2); ctx.fill();
+  // Drifting clouds.
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  const clouds = [[200, 190, 1.0], [650, 320, 0.7], [120, 470, 0.85]];
+  for (const [cx0, cy, s] of clouds) {
+    const cx = ((cx0 + t * 14) % 1400) - 160;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 150 * s, 42 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + 90 * s, cy + 12 * s, 110 * s, 36 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx - 95 * s, cy + 14 * s, 100 * s, 32 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Parallax hills.
+  ctx.fillStyle = '#5b2a6e';
+  ctx.beginPath();
+  ctx.moveTo(0, 1560);
+  for (let x = 0; x <= 1080; x += 20) ctx.lineTo(x, 1560 + Math.sin(x * 0.006 + 1.2) * 70);
+  ctx.lineTo(1080, 1920); ctx.lineTo(0, 1920); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#3c1c50';
+  ctx.beginPath();
+  ctx.moveTo(0, 1700);
+  for (let x = 0; x <= 1080; x += 20) ctx.lineTo(x, 1700 + Math.sin(x * 0.008 + 4.0) * 55);
+  ctx.lineTo(1080, 1920); ctx.lineTo(0, 1920); ctx.closePath(); ctx.fill();
+}
+
+function drawPlatforms() {
+  for (const [x, w, top] of PLATFORMS) {
+    if (VERSION === 'day1') {
+      ctx.fillStyle = '#9d9d9d';
+      ctx.fillRect(x, top, w, 36);
+      ctx.fillStyle = '#7c7c7c';
+      ctx.fillRect(x, top + 30, w, 6);
+    } else {
+      ctx.fillStyle = '#8a5a3b';
+      rr(x, top, w, 36, 10); ctx.fill();
+      ctx.fillStyle = '#58b368';
+      rr(x, top, w, 16, 8); ctx.fill();
+      // Flowers on the grass.
+      const cols = ['#ff6b9d', '#ffd166', '#ffffff'];
+      for (let i = 0; i < 3; i++) {
+        const fx = x + 40 + i * ((w - 80) / 2) + ((x * 7 + i * 13) % 30);
+        ctx.fillStyle = cols[(i + (x % 3)) % 3];
+        ctx.beginPath(); ctx.arc(fx, top + 8, 6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+}
+
+function drawDots(t) {
+  for (let i = 0; i < DOTS.length; i++) {
+    const [x, y, tc] = DOTS[i];
+    if (t >= tc) continue; // already collected
+    if (VERSION === 'day1') {
+      ctx.fillStyle = '#6f6f6f';
+      ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // Spinning gold coin.
+      const sq = Math.abs(Math.cos(t * 5 + i * 1.3));
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(Math.max(0.15, sq), 1);
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f4a900';
+      ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.stroke();
+      ctx.fillStyle = '#b87700';
+      ctx.font = '700 26px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('★', 0, 1);
+      ctx.restore();
+      // Sparkle.
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      const sp = (t * 2 + i) % 1;
+      ctx.beginPath(); ctx.arc(x + 26, y - 26, 3 + sp * 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+function drawEnemies(t) {
+  if (VERSION === 'day1') return;
+  const foes = [
+    [815 + 135 * Math.sin(t * 1.5), 1160 - 24],
+    [720 + 200 * Math.sin(t * 1.1 + 2.0), 1660 - 24],
+  ];
+  for (const [x, y] of foes) {
+    // Spiky red ball.
+    ctx.fillStyle = '#e63946';
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + t;
+      const sx = x + Math.cos(a) * 30, sy = y + Math.sin(a) * 30;
+      const tx = x + Math.cos(a) * 44, ty = y + Math.sin(a) * 44;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a - 0.25) * 26, y + Math.sin(a - 0.25) * 26);
+      ctx.lineTo(tx, ty);
+      ctx.lineTo(x + Math.cos(a + 0.25) * 26, y + Math.sin(a + 0.25) * 26);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(x, y, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(x - 9, y - 7, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 9, y - 7, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(x - 9, y - 7, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 9, y - 7, 3, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawParticles(t) {
+  if (VERSION === 'day1') return;
+  for (let i = 0; i < DOTS.length; i++) {
+    const [cx, cy, tc] = DOTS[i];
+    const dt = t - tc;
+    if (dt < 0 || dt >= 0.9) continue;
+    for (let j = 0; j < 12; j++) {
+      const a = (j / 12) * Math.PI * 2 + i;
+      const sp = 240;
+      const px = cx + Math.cos(a) * sp * dt;
+      const py = cy + Math.sin(a) * sp * dt + 320 * dt * dt;
+      ctx.globalAlpha = 1 - dt / 0.9;
+      ctx.fillStyle = j % 2 ? '#ffd166' : '#ffffff';
+      ctx.beginPath(); ctx.arc(px, py, 7 * (1 - dt / 0.9) + 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Rising "+1" and combo pop.
+    ctx.globalAlpha = 1 - dt / 0.8;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 44px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('+1', cx, cy - 60 - 60 * dt);
+    ctx.globalAlpha = 1;
+    if (dt < 0.7) {
+      const pop = 1 + 0.3 * (1 - dt / 0.7);
+      ctx.save();
+      ctx.translate(cx, cy - 130);
+      ctx.scale(pop, pop);
+      ctx.fillStyle = '#ffd166';
+      ctx.font = '800 40px sans-serif';
+      ctx.fillText('COMBO x' + (i + 1) + '!', 0, 0);
+      ctx.restore();
+    }
+  }
+}
+
+function drawOrb(t) {
+  const [x, y] = orbPos(t);
+  if (VERSION === 'day7') {
+    // Motion trail.
+    for (let k = 6; k >= 1; k--) {
+      const [px, py] = orbPos(Math.max(0, t - k * 0.045));
+      ctx.globalAlpha = 0.10 * (7 - k);
+      ctx.fillStyle = '#ff9f1c';
+      ctx.beginPath(); ctx.arc(px, py, ORB_R * (1 - k * 0.06), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = VERSION === 'day1' ? '#5a5a5a' : '#ff9f1c';
+  ctx.beginPath(); ctx.arc(x, y, ORB_R, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = VERSION === 'day1' ? '#3d3d3d' : '#e07b00';
+  ctx.stroke();
+  if (VERSION === 'day7') {
+    // Face.
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(x - 12, y - 8, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 12, y - 8, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, y + 6, 12, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+}
+
+function drawHud(t) {
+  const n = collected(t);
+  if (VERSION === 'day1') {
+    ctx.fillStyle = '#444444';
+    ctx.font = '700 56px sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('DAY 1', 60, 130);
+    ctx.textAlign = 'right';
+    ctx.fillText('SCORE ' + n + '/6', 1020, 130);
+    ctx.fillStyle = '#666666';
+    ctx.font = '400 40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ORB HOP · day one build', 540, 1860);
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    rr(50, 55, 300, 92, 46); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 56px sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('DAY 7', 84, 122);
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(700, 100, 24, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b87700';
+    ctx.font = '700 28px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('★', 700, 102);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 52px sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(n + '/6', 740, 120);
+    ctx.fillStyle = '#ff5d73';
+    ctx.font = '52px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('♥♥♥', 1020, 122);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '400 40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ORB HOP · after 7 days of updates', 540, 1860);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '400 32px sans-serif';
+    ctx.fillText('v1.7 — coins · enemies · particles · polish', 540, 1810);
+  }
+}
+
+function render(t) {
+  drawBackground(t);
+  drawPlatforms();
+  drawDots(t);
+  drawEnemies(t);
+  drawOrb(t);
+  drawParticles(t);
+  drawHud(t);
+  window.__t = t;
+}
+
+// Filming hook: render one exact moment on demand.
+let manual = false;
+window.__setTime = function (t) { manual = true; render(t); };
+window.__version = VERSION;
+
+const fixed = params.get('t');
+if (fixed !== null) {
+  render(parseFloat(fixed));
+} else {
+  const start = performance.now();
+  (function loop(now) {
+    if (!manual) render(((now - start) / 1000) % LOOP);
+    if (!manual) requestAnimationFrame(loop);
+  })(start);
+}
+</script>
+</body>
+</html>
