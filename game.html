@@ -16,6 +16,9 @@
 // Same map, same start, same scripted run in both builds.
 //   ?v=day1  — the day-one build: flat grey, dots, no enemies, no polish.
 //   ?v=day7  — the day-seven build: same run, one week of daily updates.
+//              v2.0 NIGHTMARE: 6 patrolling spike enemies, a strategy route
+//              with risk labels, risky x5 coins, threat meter, near-miss
+//              shake + panic face. Day 1 stays SO EASY, day 7 is SO HARD.
 //   ?t=3.5   — render one exact moment (used to film the video).
 // Without ?t= the game loops the run live.
 
@@ -123,11 +126,11 @@ function drawBackground(t) {
   ctx.fillRect(620, 0, 460, 520);
   ctx.fillStyle = '#ffd166';
   ctx.beginPath(); ctx.arc(880, 260, 92, 0, Math.PI * 2); ctx.fill();
-  // Drifting clouds.
+  // Drifting clouds (faster on day 7 — the world feels urgent now).
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   const clouds = [[200, 190, 1.0], [650, 320, 0.7], [120, 470, 0.85]];
   for (const [cx0, cy, s] of clouds) {
-    const cx = ((cx0 + t * 14) % 1400) - 160;
+    const cx = ((cx0 + t * 26) % 1400) - 160;
     ctx.beginPath();
     ctx.ellipse(cx, cy, 150 * s, 42 * s, 0, 0, Math.PI * 2);
     ctx.ellipse(cx + 90 * s, cy + 12 * s, 110 * s, 36 * s, 0, 0, Math.PI * 2);
@@ -170,6 +173,45 @@ function drawPlatforms() {
   }
 }
 
+function drawRoute() {
+  if (VERSION === 'day1') return;
+  // Strategy route: the dotted plan through the run's keyframes.
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.setLineDash([2, 20]);
+  ctx.beginPath();
+  ctx.moveTo(200, 1626);
+  ctx.lineTo(320, 1626);
+  ctx.lineTo(360, 1326);
+  ctx.lineTo(780, 1126);
+  ctx.lineTo(360, 856);
+  ctx.lineTo(800, 616);
+  ctx.lineTo(540, 376);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Risk label per hop: the strategy is picking when to jump.
+  const tags = [
+    [880, 1540, 'SAFE', '#58b368'],
+    [170, 1310, 'RISKY', '#ffd166'],
+    [700, 1060, 'RISKY', '#ffd166'],
+    [220, 790, 'DEADLY', '#ff8c42'],
+    [680, 550, 'DEADLY', '#ff8c42'],
+    [660, 320, 'NIGHTMARE', '#ff5d73'],
+  ];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const [tx, ty, label, col] of tags) {
+    ctx.font = '800 26px sans-serif';
+    const w = ctx.measureText(label).width + 28;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    rr(tx - w / 2, ty - 20, w, 40, 20); ctx.fill();
+    ctx.fillStyle = col;
+    ctx.fillText(label, tx, ty + 1);
+  }
+  ctx.restore();
+}
+
 function drawDots(t) {
   for (let i = 0; i < DOTS.length; i++) {
     const [x, y, tc] = DOTS[i];
@@ -192,6 +234,16 @@ function drawDots(t) {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('★', 0, 1);
       ctx.restore();
+      // Risk / reward: two coins sit right on spike patrols — worth x5.
+      if (i === 1 || i === 3) {
+        ctx.fillStyle = '#ff5d73';
+        ctx.font = '800 30px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('x5!', x, y + 52);
+        ctx.fillStyle = 'rgba(255,93,115,0.95)';
+        ctx.font = '800 24px sans-serif';
+        ctx.fillText('RISKY', x, y - 48);
+      }
       // Sparkle.
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       const sp = (t * 2 + i) % 1;
@@ -200,17 +252,37 @@ function drawDots(t) {
   }
 }
 
+// Day 7 patrols: one spike per platform plus a flying sweeper that
+// crosses the jump arcs. Same positions every run — deterministic.
+function enemyPositions(t) {
+  if (VERSION === 'day1') return [];
+  return [
+    [540 + 440 * Math.sin(t * 2.6), 1660 - 24],              // ground sweeper
+    [815 + 165 * Math.sin(t * 2.2 + 1.0), 1160 - 24],        // platform 2
+    [350 + 180 * Math.sin(t * 2.0 + 2.0), 890 - 24],         // platform 3
+    [790 + 160 * Math.sin(t * 2.4 + 0.5), 650 - 24],         // platform 4
+    [540 + 180 * Math.sin(t * 1.8 + 3.0), 410 - 24],         // top platform
+    [540 + 460 * Math.sin(t * 1.3), 1250 + 140 * Math.sin(t * 2.1)], // flying sweeper
+  ];
+}
+
+function nearestFoe(t) {
+  const [ox, oy] = orbPos(t);
+  let best = 1e9;
+  for (const [x, y] of enemyPositions(t)) {
+    const d = Math.hypot(x - ox, y - oy);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
 function drawEnemies(t) {
   if (VERSION === 'day1') return;
-  const foes = [
-    [815 + 135 * Math.sin(t * 1.5), 1160 - 24],
-    [720 + 200 * Math.sin(t * 1.1 + 2.0), 1660 - 24],
-  ];
-  for (const [x, y] of foes) {
-    // Spiky red ball.
+  for (const [x, y] of enemyPositions(t)) {
+    // Spiky red ball, spinning fast.
     ctx.fillStyle = '#e63946';
     for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2 + t;
+      const a = (k / 8) * Math.PI * 2 + t * 3;
       const sx = x + Math.cos(a) * 30, sy = y + Math.sin(a) * 30;
       const tx = x + Math.cos(a) * 44, ty = y + Math.sin(a) * 44;
       ctx.beginPath();
@@ -226,6 +298,10 @@ function drawEnemies(t) {
     ctx.fillStyle = '#222';
     ctx.beginPath(); ctx.arc(x - 9, y - 7, 3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(x + 9, y - 7, 3, 0, Math.PI * 2); ctx.fill();
+    // Angry brows.
+    ctx.strokeStyle = '#7f1d1d'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 16, y - 20); ctx.lineTo(x - 4, y - 14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 16, y - 20); ctx.lineTo(x + 4, y - 14); ctx.stroke();
   }
 }
 
@@ -283,12 +359,18 @@ function drawOrb(t) {
   ctx.strokeStyle = VERSION === 'day1' ? '#3d3d3d' : '#e07b00';
   ctx.stroke();
   if (VERSION === 'day7') {
-    // Face.
+    // Face: smile normally, panic when a spike is close.
+    const panic = nearestFoe(t) < 170;
     ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.arc(x - 12, y - 8, 5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + 12, y - 8, 5, 0, Math.PI * 2); ctx.fill();
+    const er = panic ? 7 : 5;
+    ctx.beginPath(); ctx.arc(x - 12, y - 8, er, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 12, y - 8, er, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#222'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(x, y + 6, 12, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    if (panic) {
+      ctx.beginPath(); ctx.arc(x, y + 12, 7, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.arc(x, y + 6, 12, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    }
   }
 }
 
@@ -301,6 +383,10 @@ function drawHud(t) {
     ctx.fillText('DAY 1', 60, 130);
     ctx.textAlign = 'right';
     ctx.fillText('SCORE ' + n + '/6', 1020, 130);
+    ctx.fillStyle = '#777777';
+    ctx.font = '700 38px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('SO EASY ★☆☆☆☆ · 0 ENEMIES', 60, 192);
     ctx.fillStyle = '#666666';
     ctx.font = '400 40px sans-serif';
     ctx.textAlign = 'center';
@@ -332,17 +418,56 @@ function drawHud(t) {
     ctx.fillText('ORB HOP · after 7 days of updates', 540, 1860);
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '400 32px sans-serif';
-    ctx.fillText('v1.7 — coins · enemies · particles · polish', 540, 1810);
+    ctx.fillText('v2.0 — NIGHTMARE ★★★★★ · 6 enemies · strategy route', 540, 1810);
+    // Threat meter: fills as the run gets harder.
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    rr(50, 165, 300, 26, 13); ctx.fill();
+    const threat = Math.max(0, Math.min(1, t / 10));
+    const tg = ctx.createLinearGradient(50, 0, 350, 0);
+    tg.addColorStop(0, '#58b368');
+    tg.addColorStop(0.6, '#ffd166');
+    tg.addColorStop(1, '#ff5d73');
+    ctx.fillStyle = tg;
+    if (threat > 0.02) { rr(53, 168, 294 * threat, 20, 10); ctx.fill(); }
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 24px sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('THREAT ' + Math.round(threat * 100) + '%', 370, 178);
+    // Enemy counter.
+    ctx.fillStyle = '#ff5d73';
+    ctx.font = '800 36px sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('ENEMIES ×6', 1020, 178);
   }
 }
 
 function render(t) {
+  ctx.save();
+  if (VERSION === 'day7' && nearestFoe(t) < 170) {
+    // Near-miss shake: deterministic, so every filmed frame matches.
+    ctx.translate(7 * Math.sin(t * 39.7), 5 * Math.sin(t * 47.3));
+  }
   drawBackground(t);
+  drawRoute();
   drawPlatforms();
   drawDots(t);
   drawEnemies(t);
   drawOrb(t);
   drawParticles(t);
+  if (VERSION === 'day7' && nearestFoe(t) < 170) {
+    // Red danger vignette + warning.
+    const vg = ctx.createRadialGradient(540, 960, 500, 540, 960, 1150);
+    vg.addColorStop(0, 'rgba(255,45,85,0)');
+    vg.addColorStop(1, 'rgba(255,45,85,0.45)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, 1080, 1920);
+    const [ox, oy] = orbPos(t);
+    ctx.fillStyle = '#ff2d55';
+    ctx.font = '900 64px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('!', ox, oy - 78);
+  }
+  ctx.restore();
   drawHud(t);
   window.__t = t;
 }

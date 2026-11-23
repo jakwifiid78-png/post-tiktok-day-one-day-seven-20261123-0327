@@ -16,8 +16,10 @@ the run on a loop.
   polish. The game as it was on the day it was made.
 - `?v=day7` — the day-seven build: the **same map, same start, same run**,
   after a week of daily updates — sunset sky, drifting clouds, spinning gold
-  coins, patrolling spike enemies, particle bursts, combo pops, hearts, and a
-  proper HUD.
+  coins (two of them risky x5 coins), **six** patrolling spike enemies, a
+  strategy route with risk labels (SAFE → NIGHTMARE), a threat meter,
+  near-miss screen shake with a panic face, particle bursts, combo pops,
+  hearts, and a proper HUD. Day 1 is SO EASY; day 7 is SO HARD.
 
 Same moments, visibly more going on the second time. That is the whole video.
 
@@ -49,4 +51,5 @@ in headless Chromium (same timeline in both builds, so the moments match),
 cut together with ffmpeg, with on-screen titles and make.fun's referral end
 card from the press pack laid over the last 2.5 seconds, referral code typed
 into its field. No footage was faked or drawn by hand — what you see is the
-game itself.
+game itself. Rebuild the video any time with `./build-video.sh` (it re-cuts
+the segments from `frames/` and re-concats them).
