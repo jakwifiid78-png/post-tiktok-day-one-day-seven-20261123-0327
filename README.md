@@ -65,3 +65,23 @@ gameplay centered 1080x810. Kept segB (ONE WEEK LATER) + segD (referral end
 card n0n6z7h3) from v2.0. Build: `bash build-video-yt.sh` -> 21.0s, 1080x1920,
 30fps, H.264 + silent AAC. NOTE: caption still says "Made by my AI agent" —
 the footage is now another game, not ORB HOP; user decides on caption wording.
+
+## v3.1 — label fix: DAY ONE / DAY SEVEN now persistent + DAY 2-6 montage (23 Nov 2026, ~21:50 WIB)
+User complaint: "kok videonya g ada day one and day seven? trus seperti kyk ada yg disingkat".
+Root cause found: in v3 the DAY ONE / DAY SEVEN overlays FADED OUT after 3.0s
+(FADE alpha expression in build-video-yt.sh), so most of each clip showed plain
+gameplay with no label; days 2-6 were also skipped entirely (jump level 1/30
+straight to 30/30). The file the user re-uploaded was byte-identical (md5) to
+the v3 file on disk — the labels were there, just too brief.
+Fixes in v3.1 (build: `bash build-video-yt-v31.sh` -> 28.0s, 1080x1920, 30fps):
+new 2s title card "DAY ONE vs DAY SEVEN" in one frame; DAY ONE / DAY SEVEN
+labels now PERSISTENT for the whole clip (fade-in only, no fade-out); new 5x1s
+montage DAY 2..DAY 6 from mid levels (6/30, 11/30, 17/30, 21/30, 26/30) so the
+week is not skipped. segB (ONE WEEK LATER) + segD (referral end card n0n6z7h3)
+kept. Frames verified in video/check-v31/ (t1.0 title, t8.5 DAY ONE still up at
+end of day-1 clip, t12.5 DAY 5 level 21/30, t21.0 DAY SEVEN still up late in
+day-7 clip).
+Known, NOT fixed: the game's own HUD text (MENU, DEATHS, PLAY MORE GAMES,
+SNUBBY LAND) is clipped at the left/right edges — that clipping is already in
+the original YouTube recording itself (verified on the source frame at t=5s),
+not from this edit; the missing pixels cannot be restored.
